@@ -32,7 +32,7 @@ def lite_3x3_layer(inplanes,
                                    planes,
                                    kernel_size=3,
                                    stride=1,
-                                   padding=1
+                                   padding=1,
                                    dilation=1,
                                    groups=planes,
                                    bias=0))
@@ -62,7 +62,7 @@ class ChannelGate(nn.Module):
                              padding=0,
                              bias=True)
         self.gate_activation = nn.Sigmoid()
-    
+
     def forward(self, x):
         identity = x
 
@@ -117,7 +117,7 @@ class OSBlock(nn.Module):
                     )
                 )
             multi_streams.append(nn.Sequential(*layers))
-        self.stream1, self.stream2, self.stream3, self.stream4 = multi_streams
+        self.multi_streams = nn.ModuleList(multi_streams)
 
         self.fuse_gate = ChannelGate(mid_planes)
         self.conv1x1_last = ConvModule(
@@ -130,10 +130,11 @@ class OSBlock(nn.Module):
             norm_cfg=self.norm_cfg,
             act_cfg=None
         )
-    
+
     def forward(self, x):
         identity = x
 
+        x1 = self.conv1x1_first(x)
         
 
 
@@ -141,12 +142,12 @@ class OSBlock(nn.Module):
 @BACKBONES.register_module()
 class OSNet(BaseBackbone):
 
-    arch_settings = [
+    arch_settings = {
         0.25: [16, 64, 96, 128],
         0.5: [32, 128, 192, 256],
         0.75: [48, 192, 288, 384],
         1.0: [64, 256, 384, 512]
-    ]
+    }
 
     def __init__(self,
                  widen_factor=1.0,
@@ -195,14 +196,11 @@ class OSNet(BaseBackbone):
             act_cfg=self.act_cfg
         )
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-    
+
     def make_layer(self, out_channels, num_blocks, block):
         layers = []
         layers.append(block())
-        for i in range(num_blocks):
-
-
-
+        # for i in range(num_blocks):
 
     def _freeze_stages(self):
         if self.frozen_stages >= 0:
@@ -226,4 +224,3 @@ class OSNet(BaseBackbone):
                     constant_init(m, 1)
         else:
             raise TypeError('pretrained must be a str or None')
-    
