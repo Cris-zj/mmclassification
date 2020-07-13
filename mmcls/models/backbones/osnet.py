@@ -1,0 +1,229 @@
+import logging
+
+import torch.nn as nn
+from torch.nn.modules.batchnorm import _BatchNorm
+
+from mmcv.cnn import (ConvModule, build_conv_layer, build_norm_layer,
+                      build_activation_layer,
+                      constant_init, kaiming_init)
+from mmcv.runner import load_checkpoint
+
+from ..builder import BACKBONES
+from .base_backbone import BaseBackbone
+
+
+def lite_3x3_layer(inplanes,
+                   planes,
+                   conv_cfg=None,
+                   norm_cfg=dict(type='BN'),
+                   act_cfg=dict(type='ReLU')):
+    layers = []
+    layers.append(build_conv_layer(conv_cfg,
+                                   inplanes,
+                                   planes,
+                                   kernel_size=1,
+                                   stride=1,
+                                   padding=0,
+                                   dilation=1,
+                                   groups=1,
+                                   bias=0))
+    layers.append(build_conv_layer(conv_cfg,
+                                   planes,
+                                   planes,
+                                   kernel_size=3,
+                                   stride=1,
+                                   padding=1
+                                   dilation=1,
+                                   groups=planes,
+                                   bias=0))
+    layers.append(build_norm_layer(norm_cfg, planes)[1])
+    layers.append(build_activation_layer(act_cfg))
+    return nn.Sequential(*layers)
+
+
+class ChannelGate(nn.Module):
+
+    def __init__(self,
+                 inplanes):
+        self.inplanes = inplanes
+        self.gap = nn.AdaptiveAvgPool2d(1)
+        reduction = 16
+        self.fc1 = nn.Conv2d(self.inplanes,
+                             self.inplanes // reduction,
+                             kernel_size=1,
+                             stride=1,
+                             padding=0,
+                             bias=True)
+        self.relu = nn.ReLU(inplace=True)
+        self.fc2 = nn.Conv2d(self.inplanes // reduction,
+                             self.inplanes,
+                             kernel_size=1,
+                             stride=1,
+                             padding=0,
+                             bias=True)
+        self.gate_activation = nn.Sigmoid()
+    
+    def forward(self, x):
+        identity = x
+
+        x = self.gap(x)
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        x = self.gate_activation(x)
+
+        return identity * x
+
+
+class OSBlock(nn.Module):
+    expansion = 4
+
+    def __init__(self,
+                 inplanes,
+                 planes,
+                 downsample=None,
+                 conv_cfg=None,
+                 norm_cfg=dict(type='BN'),
+                 act_cfg=dict(type='ReLU')):
+        self.downsample = downsample
+        self.inplanes = inplanes
+        self.planes = planes
+        self.conv_cfg = conv_cfg
+        self.norm_cfg = norm_cfg
+        self.act_cfg = act_cfg
+
+        mid_planes = planes // self.expansion
+        self.conv1x1_first = ConvModule(
+            in_channels=self.inplanes,
+            out_channels=mid_planes,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            conv_cfg=self.conv_cfg,
+            norm_cfg=self.norm_cfg,
+            act_cfg=self.act_cfg
+        )
+        multi_streams = []
+        for i in range(self.expansion):
+            layers = []
+            for _ in range(i + 1):
+                layers.append(
+                    lite_3x3_layer(
+                        mid_planes,
+                        mid_planes,
+                        conv_cfg=self.conv_cfg,
+                        norm_cfg=self.norm_cfg,
+                        act_cfg=self.act_cfg
+                    )
+                )
+            multi_streams.append(nn.Sequential(*layers))
+        self.stream1, self.stream2, self.stream3, self.stream4 = multi_streams
+
+        self.fuse_gate = ChannelGate(mid_planes)
+        self.conv1x1_last = ConvModule(
+            in_channels=self.inplanes,
+            out_channels=self.planes,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            conv_cfg=self.conv_cfg,
+            norm_cfg=self.norm_cfg,
+            act_cfg=None
+        )
+    
+    def forward(self, x):
+        identity = x
+
+        
+
+
+
+@BACKBONES.register_module()
+class OSNet(BaseBackbone):
+
+    arch_settings = [
+        0.25: [16, 64, 96, 128],
+        0.5: [32, 128, 192, 256],
+        0.75: [48, 192, 288, 384],
+        1.0: [64, 256, 384, 512]
+    ]
+
+    def __init__(self,
+                 widen_factor=1.0,
+                 out_indices=(7, ),
+                 frozen_stages=-1,
+                 conv_cfg=None,
+                 norm_cfg=dict(type='BN'),
+                 act_cfg=dict(type='ReLU'),
+                 norm_eval=False):
+        super(OSNet, self).__init__()
+        self.widen_factor = widen_factor
+        for index in out_indices:
+            if index not in range(0, 8):
+                raise ValueError('the item in out_indices must in '
+                                 f'range(0, 8). But received {index}')
+
+        if frozen_stages not in range(-1, 8):
+            raise ValueError('frozen_stages must be in range(-1, 8). '
+                             f'But received {frozen_stages}')
+        self.out_indices = out_indices
+        self.frozen_stages = frozen_stages
+        self.conv_cfg = conv_cfg
+        self.norm_cfg = norm_cfg
+        self.act_cfg = act_cfg
+        self.norm_eval = norm_cfg
+
+        self.inplanes = round(64 * self.widen_factor)
+        self._make_stem_layer()
+
+        self.stage_blocks = self.arch_settings[widen_factor]
+        self.stage_repeats = [2, 2, 2, 1]
+        for i, n in enumerate(self.stage_repeats):
+            outplanes = self.stage_blocks[i]
+            os_layer = make_layer(outplanes, n)
+            self.inplanes = outplanes
+
+    def _make_stem_layer(self):
+        self.conv1 = ConvModule(
+            in_channels=3,
+            out_channels=self.inplanes,
+            kernel_size=7,
+            stride=2,
+            padding=3,
+            conv_cfg=self.conv_cfg,
+            norm_cfg=self.norm_cfg,
+            act_cfg=self.act_cfg
+        )
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+    
+    def make_layer(self, out_channels, num_blocks, block):
+        layers = []
+        layers.append(block())
+        for i in range(num_blocks):
+
+
+
+
+    def _freeze_stages(self):
+        if self.frozen_stages >= 0:
+            for param in self.conv1.parameters():
+                param.requires_grad = False
+        for i in range(1, self.frozen_stages + 1):
+            layer = getattr(self, f'layer{i}')
+            layer.eval()
+            for param in layer.parameters():
+                param.requires_grad = False
+
+    def init_weights(self, pretrained=None):
+        if isinstance(pretrained, str):
+            logger = logging.getLogger()
+            load_checkpoint(self, pretrained, strict=False, logger=logger)
+        elif pretrained is None:
+            for m in self.modules():
+                if isinstance(m, nn.Conv2d):
+                    kaiming_init(m)
+                elif isinstance(m, (_BatchNorm, nn.GroupNorm)):
+                    constant_init(m, 1)
+        else:
+            raise TypeError('pretrained must be a str or None')
+    
