@@ -142,7 +142,7 @@ class OSBlock(nn.Module):
         out = self.gate_fuse(self.multi_streams[0](x1))
         for i in range(1, self.expansion):
             out += self.gate_fuse(self.multi_streams[i](x1))
-        
+
         out = self.conv1x1_last(out)
 
         if self.downsample is not None:
@@ -216,7 +216,7 @@ class OSNet(BaseBackbone):
             padding=0,
             conv_cfg=self.conv_cfg,
             norm_cfg=self.norm_cfg,
-            act_cfg=act_cfg=self.act_cfg
+            act_cfg=self.act_cfg
         )
         layer_name = f'layer{len(self.stage_repeats) + 1}'
         self.add_module(layer_name, layer)
@@ -315,7 +315,23 @@ class OSNet(BaseBackbone):
                     constant_init(m, 1)
         else:
             raise TypeError('pretrained must be a str or None')
-    
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.maxpool(x)
+
+        outs = []
+        for i, layer_name in enumerate(self.os_layers):
+            layer = getattr(self, layer_name)
+            x = layer(x)
+            if i in self.out_indices:
+                outs.append(x)
+
+        if len(outs) == 1:
+            return outs[0]
+        else:
+            return tuple(outs)
+
     def train(self, mode=True):
         super(OSNet, self).train(mode)
         self._freeze_stages()
