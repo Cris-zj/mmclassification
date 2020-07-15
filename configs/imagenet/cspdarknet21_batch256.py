@@ -1,6 +1,6 @@
 _base_ = [
-    '../_base_/models/darknet21.py',
-    '../_base_/schedules/imagenet_bs128_poly.py',
+    '../_base_/models/cspdarknet21.py',
+    '../_base_/schedules/imagenet_bs256_poly.py',
     '../_base_/default_runtime.py'
 ]
 # dataset settings
@@ -26,7 +26,7 @@ test_pipeline = [
     dict(type='Collect', keys=['img', 'gt_label'])
 ]
 data = dict(
-    samples_per_gpu=32,
+    samples_per_gpu=64,
     workers_per_gpu=2,
     train=dict(
         type=dataset_type,
