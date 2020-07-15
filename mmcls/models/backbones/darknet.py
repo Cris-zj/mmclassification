@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn.modules.batchnorm import _BatchNorm
 
-from mmcv.cnn import (ConvModule, build_conv_layer, build_norm_layer,
+from mmcv.cnn import (build_conv_layer, build_norm_layer,
                       build_activation_layer,
                       constant_init, kaiming_init)
 from mmcv.runner import load_checkpoint
@@ -21,7 +21,7 @@ def ConvNormActivation(inplanes,
                        conv_cfg=None,
                        norm_cfg=dict(type='BN'),
                        act_cfg=dict(type='LeakyReLU',
-                                           negative_slope=0.1)):
+                                    negative_slope=0.1)):
     layers = []
     layers.append(build_conv_layer(conv_cfg,
                                    inplanes,
@@ -305,7 +305,7 @@ class DarkNet(BaseBackbone):
                  norm_cfg=dict(type='BN', requires_grad=True),
                  norm_eval=False,
                  act_cfg=dict(type='LeakyReLU',
-                                     negative_slope=0.1, inplace=True)):
+                              negative_slope=0.1, inplace=True)):
         super(DarkNet, self).__init__()
         if depth not in self.arch_settings:
             raise KeyError('invalid depth {} for resnet'.format(depth))
@@ -423,7 +423,7 @@ class DarkNet(BaseBackbone):
             x = layer(x)
             if i in self.out_indices:
                 outs.append(x)
-        
+
         if len(outs) == 1:
             return outs[0]
         else:
