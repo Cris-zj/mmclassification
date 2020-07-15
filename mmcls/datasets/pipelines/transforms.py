@@ -440,3 +440,105 @@ class Normalize(object):
         repr_str += f'std={list(self.std)}, '
         repr_str += f'to_rgb={self.to_rgb})'
         return repr_str
+
+
+@PIPELINES.register_module()
+class RandomErase(object):
+    """Randomly erases an image patch.
+
+    Origin: `<https://github.com/zhunzhong07/Random-Erasing>`_
+
+    Reference:
+        Zhong et al. Random Erasing Data Augmentation.
+
+    Args:
+        erase_prob (float): probability that this operation takes place.
+            Default is 0.5.
+        scale (tuple): Range of the random size of the erased area compared
+            to the original image. Default: (0.02, 0.4).
+        ratio (tuple): Range of the random aspect ratio of the erased area
+            compared to the original image. Default: (3. / 10., 10. / 3).
+        mean (list): erasing value. Default: [0.4914, 0.4822, 0.4465].
+    """
+
+    def __init__(self,
+                 erase_prob=0.5,
+                 scale=(0.02, 0.4),
+                 ratio=(3. / 10., 10. / 3),
+                 mean=[0.4914, 0.4822, 0.4465]):
+        self.erase_prob = erase_prob
+        self.scale = scale
+        self.ratio = ratio
+        self.mean = mean
+
+    @staticmethod
+    def get_params(img, scale, ratio):
+        """Get parameters for ``erase`` for a random erase.
+
+        Args:
+            img (ndarray): Image to be erased.
+            scale (tuple): Range of the random size of the erased area
+                compared to the original image size.
+            ratio (tuple): Range of the random aspect ratio of the erased area
+                compared to the original image area.
+
+        Returns:
+            tuple: Params (xmin, ymin, target_height, target_width) to be
+                passed to ``erase`` for a random erase.
+        """
+
+        height = img.shape[0]
+        width = img.shape[1]
+        area = height * width
+
+        for _ in range(10):
+            target_area = random.uniform(*scale) * area
+            aspect_ratio = random.uniform(*ratio)
+
+            target_height = int(round(math.sqrt(target_area * aspect_ratio)))
+            target_width = int(round(math.sqrt(target_area / aspect_ratio)))
+
+            if 0 < target_height <= height and 0 < target_width <= width:
+                xmin = random.randint(0, height - target_height)
+                ymin = random.randint(0, width - target_width)
+                return xmin, ymin, target_height, target_width
+
+        # Fallback to central crop
+        in_ratio = float(width) / float(height)
+        if in_ratio < min(ratio):
+            target_width = width
+            target_height = int(round(target_width / min(ratio)))
+        elif in_ratio > max(ratio):
+            target_height = height
+            target_width = int(round(target_height * max(ratio)))
+        else:  # whole image
+            target_width = width
+            target_height = height
+        xmin = (height - target_height) // 2
+        ymin = (width - target_width) // 2
+        return xmin, ymin, target_height, target_width
+
+    def __call__(self, results):
+        if random.uniform(0, 1) > self.erase_prob:
+            return results
+
+        for key in results.get('img_fields', ['img']):
+            img = results[key]
+            xmin, ymin, h, w = self.get_params(
+                img, self.scale, self.ratio)
+            if img.ndim == 3:
+                img[xmin:xmin + h, ymin:ymin + w, 0] = self.mean[0]
+                img[xmin:xmin + h, ymin:ymin + w, 1] = self.mean[1]
+                img[xmin:xmin + h, ymin:ymin + w, 2] = self.mean[2]
+            else:
+                img[xmin:xmin + h, ymin:ymin + w, 0] = self.mean[0]
+            results[key] = img
+        return results
+
+    def __repr__(self):
+        format_string = self.__class__.__name__
+        format_string += f'(erase_prob={self.erase_prob}'
+        format_string += f', scale={tuple(round(s, 4) for s in self.scale)}'
+        format_string += f', ratio={tuple(round(r, 4) for r in self.ratio)}'
+        format_string += f', mean={tuple(round(m, 4) for m in self.mean)})'
+        return format_string
