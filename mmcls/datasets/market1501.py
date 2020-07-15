@@ -91,7 +91,7 @@ class Market1501(BaseDataset):
         assert num_vaild_query > 0, \
             'Error: all query identities do not appear in gallery'
         all_cmc = np.asarray(all_cmc).astype(np.float32)
-        all_cmc = all_cmc.sum(0) / num_vaild_query
+        all_cmc = all_cmc.sum(0) / float(num_vaild_query)
         mAP = np.mean(all_AP)
 
         return all_cmc, mAP
@@ -100,17 +100,20 @@ class Market1501(BaseDataset):
 def make_dataset(root, relabel=False):
     images = []
     root = os.path.expanduser(root)
-    img_path_list = glob.glob(os.path.join(root, '*.jpg'))
     pattern = re.compile(r'([-\d]+)_c(\d)')
     classes = set()
-    for img_path in img_path_list:
+    for img_path in os.listdir(root):
+        if os.path.splitext(img_path)[1] != '.jpg':
+            continue
         pid, _ = map(int, pattern.search(img_path).groups())
         if pid == -1:
             continue  # junk images are just ignored
         classes.add(pid)
     class_to_idx = {pid: i for i, pid in enumerate(classes)}
 
-    for img_path in img_path_list:
+    for img_path in os.listdir(root):
+        if os.path.splitext(img_path)[1] != '.jpg':
+            continue
         pid, camid = map(int, pattern.search(img_path).groups())
         if pid == -1:
             continue  # junk images are just ignored
