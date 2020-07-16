@@ -45,6 +45,7 @@ class ChannelGate(nn.Module):
 
     def __init__(self,
                  inplanes):
+        super(ChannelGate, self).__init__()
         self.inplanes = inplanes
         self.gap = nn.AdaptiveAvgPool2d(1)
         reduction = 16
@@ -85,6 +86,7 @@ class OSBlock(nn.Module):
                  conv_cfg=None,
                  norm_cfg=dict(type='BN'),
                  act_cfg=dict(type='ReLU')):
+        super(OSBlock, self).__init__()
         self.inplanes = inplanes
         self.planes = planes
         self.downsample = downsample
