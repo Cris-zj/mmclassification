@@ -1,6 +1,5 @@
 import os
 import re
-import glob
 import numpy as np
 
 from .base_dataset import BaseDataset

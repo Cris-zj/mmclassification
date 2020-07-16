@@ -166,7 +166,7 @@ class OSNet(BaseBackbone):
 
     def __init__(self,
                  widen_factor=1.0,
-                 out_indices=(7, ),
+                 out_indices=(7,),
                  frozen_stages=-1,
                  conv_cfg=None,
                  norm_cfg=dict(type='BN'),

@@ -13,12 +13,12 @@ class ImageReID(BaseReID):
 
         if neck is not None:
             self.neck = build_neck(neck)
-        
+
         if head is not None:
             self.head = build_head(head)
-        
+
         self.init_weights(pretrained=pretrained)
-    
+
     def init_weights(self, pretrained=None):
         super(ImageReID, self).init_weights(pretrained)
         self.backbone.init_weights(pretrained=pretrained)
@@ -30,7 +30,7 @@ class ImageReID(BaseReID):
                 self.neck.init_weights()
         if self.with_head:
             self.head.init_weights()
-    
+
     def extract_feat(self, img):
         """Directly extract features from the backbone + neck
         """
@@ -38,7 +38,7 @@ class ImageReID(BaseReID):
         if self.with_neck:
             x = self.neck(x)
         return x
-    
+
     def forward_train(self, img, gt_label, **kwargs):
         """Forward computation during training.
 
