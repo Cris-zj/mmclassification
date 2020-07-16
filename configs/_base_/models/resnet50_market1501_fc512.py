@@ -1,10 +1,11 @@
 # model settings
 model = dict(
-    type='ImageClassifier',
+    type='ImageReID',
     backbone=dict(
         type='ResNet',
         depth=50,
         num_stages=4,
+        strides=(1, 2, 2, 1),
         out_indices=(3, ),
         style='pytorch'),
     neck=[
