@@ -10,14 +10,18 @@ import torch.distributed as dist
 from mmcv.runner import get_dist_info
 
 
-def single_gpu_test(model, data_loader, show=False, out_dir=None):
+def single_gpu_test(model,
+                    data_loader,
+                    show=False,
+                    out_dir=None,
+                    return_loss=True):
     model.eval()
     results = []
     dataset = data_loader.dataset
     prog_bar = mmcv.ProgressBar(len(dataset))
     for i, data in enumerate(data_loader):
         with torch.no_grad():
-            result = model(return_loss=True, **data)
+            result = model(return_loss=return_loss, **data)
         results.append(result)
 
         if show or out_dir:
@@ -29,7 +33,11 @@ def single_gpu_test(model, data_loader, show=False, out_dir=None):
     return results
 
 
-def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
+def multi_gpu_test(model,
+                   data_loader,
+                   tmpdir=None,
+                   gpu_collect=False,
+                   return_loss=True,):
     """Test model with multiple gpus.
 
     This method tests model with multiple gpus and collects the results
@@ -57,7 +65,7 @@ def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
     time.sleep(2)  # This line can prevent deadlock problem in some cases.
     for i, data in enumerate(data_loader):
         with torch.no_grad():
-            result = model(return_loss=True, **data)
+            result = model(return_loss=return_loss, **data)
         results.append(result)
 
         if rank == 0:

@@ -9,7 +9,7 @@ from mmcv.runner import get_dist_info, init_dist, load_checkpoint
 from mmcls.apis import multi_gpu_test, single_gpu_test
 from mmcls.core import wrap_fp16_model, compute_distance_matrix
 from mmcls.datasets import build_dataloader, build_dataset
-from mmcls.models import build_classifier
+from mmcls.models import build_reid
 
 
 def parse_args():
@@ -78,7 +78,7 @@ def main():
         round_up=False)
 
     # build the model and load checkpoint
-    model = build_classifier(cfg.model)
+    model = build_reid(cfg.model)
     fp16_cfg = cfg.get('fp16', None)
     if fp16_cfg is not None:
         wrap_fp16_model(model)
@@ -86,44 +86,61 @@ def main():
 
     if not distributed:
         model = MMDataParallel(model, device_ids=[0])
-        query_outputs = single_gpu_test(model, query_loader)
-        gallery_outputs = single_gpu_test(model, gallery_loader)
+        print('Extracting features from query set ...')
+        query_outputs = single_gpu_test(model, query_loader,
+                                        return_loss=False)
+        print('\n')
+        print('Extracting features from gallery set ...')
+        gallery_outputs = single_gpu_test(model, gallery_loader,
+                                          return_loss=False)
+        print('\n')
     else:
         model = MMDistributedDataParallel(
             model.cuda(),
             device_ids=[torch.cuda.current_device()],
             broadcast_buffers=False)
-        query_outputs = multi_gpu_test(model, query_loader, args.tmpdir,
-                                       args.gpu_collect)
-        gallery_outputs = multi_gpu_test(model, gallery_loader, args.tmpdir,
-                                         args.gpu_collect)
+        query_outputs = multi_gpu_test(model, query_loader,
+                                       return_loss=False,
+                                       tmpdir=args.tmpdir,
+                                       gpu_collect=args.gpu_collect)
+        gallery_outputs = multi_gpu_test(model, gallery_loader,
+                                         return_loss=False,
+                                         tmpdir=args.tmpdir,
+                                         gpu_collect=args.gpu_collect)
 
     rank, _ = get_dist_info()
     if rank == 0:
         query_feats, query_pids, query_camids = [], [], []
         for output in query_outputs:
-            query_feats.append(output['feature'].items())
-            query_pids.append(output['pid'].items())
-            query_camids.append(output['camid'].items())
+            query_feats.append(output['feature'].data.cpu())
+            query_pids.append(output['pid'].data.cpu())
+            query_camids.append(output['camid'].data.cpu())
+        query_feats = torch.cat(query_feats, dim=0)
+        query_pids = torch.cat(query_pids, dim=0).numpy()
+        query_camids = torch.cat(query_camids, dim=0).numpy()
 
         gallery_feats, gallery_pids, gallery_camids = [], [], []
         for output in gallery_outputs:
-            gallery_feats.append(output['feature'].items())
-            gallery_pids.append(output['pid'].items())
-            gallery_camids.append(output['camid'].items())
+            gallery_feats.append(output['feature'].data.cpu())
+            gallery_pids.append(output['pid'].data.cpu())
+            gallery_camids.append(output['camid'].data.cpu())
+        gallery_feats = torch.cat(gallery_feats, dim=0)
+        gallery_pids = torch.cat(gallery_pids, dim=0).numpy()
+        gallery_camids = torch.cat(gallery_camids, dim=0).numpy()
 
         eval_cfg = cfg.get('evaluation', {})
         dist_metric = eval_cfg.get('metric', 'euclidean')
         print(f'Computing distance matrix with metric = {dist_metric} ...')
         distmat = compute_distance_matrix(
             query_feats, gallery_feats, metric=dist_metric)
+        distmat = distmat.numpy()
 
         print('Computing CMC and mAP ...')
         cmc, mAP = query_datatset.evaluate(
             distmat, query_pids, query_camids, gallery_pids, gallery_camids)
 
         print('** Results **')
-        print('mAP: {:.1f}'.format(mAP))
+        print('mAP: {:.1%}'.format(mAP))
         print('CMC curve')
         ranks = eval_cfg.get('ranks', [1, 5, 10, 20])
         for i in ranks:
