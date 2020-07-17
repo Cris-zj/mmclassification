@@ -1,6 +1,7 @@
 # model settings
 model = dict(
     type='ImageReID',
+    pretrained='pretrained/resnet50-19c8e357.pth',
     backbone=dict(
         type='ResNet',
         depth=50,
