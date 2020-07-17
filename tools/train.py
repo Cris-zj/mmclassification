@@ -133,6 +133,7 @@ def main():
         model = build_classifier(cfg.model)
     elif 'reid' in task_type:
         model = build_reid(cfg.model)
+        args.no_validate = True
 
     datasets = [build_dataset(cfg.data.train)]
     if len(cfg.workflow) == 2:
