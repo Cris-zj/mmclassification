@@ -124,7 +124,7 @@ class OSBlock(nn.Module):
         self.gate_fuse = ChannelGate(mid_planes)
 
         self.conv1x1_last = ConvModule(
-            in_channels=self.inplanes,
+            in_channels=mid_planes,
             out_channels=self.planes,
             kernel_size=1,
             stride=1,
@@ -168,7 +168,8 @@ class OSNet(BaseBackbone):
 
     def __init__(self,
                  widen_factor=1.0,
-                 out_indices=(7,),
+                 num_stages=4,
+                 out_indices=(3,),
                  frozen_stages=-1,
                  conv_cfg=None,
                  norm_cfg=dict(type='BN'),
