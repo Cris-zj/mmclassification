@@ -12,7 +12,7 @@ from mmcv.runner import init_dist
 from mmcls import __version__
 from mmcls.apis import set_random_seed, train_model
 from mmcls.datasets import build_dataset
-from mmcls.models import build_classifier
+from mmcls.models import build_classifier, build_reid
 from mmcls.utils import collect_env, get_root_logger
 
 
@@ -128,7 +128,11 @@ def main():
     cfg.seed = args.seed
     meta['seed'] = args.seed
 
-    model = build_classifier(cfg.model)
+    task_type = cfg.model.get('type').lower()
+    if 'classifier' in task_type:
+        model = build_classifier(cfg.model)
+    elif 'reid' in task_type:
+        model = build_reid(cfg.model)
 
     datasets = [build_dataset(cfg.data.train)]
     if len(cfg.workflow) == 2:
