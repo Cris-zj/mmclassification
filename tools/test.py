@@ -1,5 +1,6 @@
 import argparse
 import os
+import time
 
 import mmcv
 import numpy as np
@@ -11,6 +12,7 @@ from mmcls.apis import multi_gpu_test, single_gpu_test
 from mmcls.core import wrap_fp16_model, compute_distance_matrix
 from mmcls.datasets import build_dataloader, build_dataset
 from mmcls.models import build_classifier, build_reid
+from mmcls.utils import get_root_logger
 
 
 def parse_args():
@@ -90,7 +92,7 @@ def test_classifier(cfg, args, distributed):
         mmcv.dump(outputs, args.out)
 
 
-def test_reid(cfg, args, distributed):
+def test_reid(cfg, args, distributed, logger):
     cfg.data.query.test_mode = True
     cfg.data.gallery.test_mode = True
     # build the dataloader
@@ -121,11 +123,11 @@ def test_reid(cfg, args, distributed):
 
     if not distributed:
         model = MMDataParallel(model, device_ids=[0])
-        print('Extracting features from query set ...')
+        logger.info('Extracting features from query set ...')
         query_outputs = single_gpu_test(model, query_loader,
                                         return_loss=False)
         print('\n')
-        print('Extracting features from gallery set ...')
+        logger.info('Extracting features from gallery set ...')
         gallery_outputs = single_gpu_test(model, gallery_loader,
                                           return_loss=False)
         print('\n')
@@ -134,13 +136,13 @@ def test_reid(cfg, args, distributed):
             model.cuda(),
             device_ids=[torch.cuda.current_device()],
             broadcast_buffers=False)
-        print('Extracting features from query set ...')
+        logger.info('Extracting features from query set ...')
         query_outputs = multi_gpu_test(model, query_loader,
                                        return_loss=False,
                                        tmpdir=args.tmpdir,
                                        gpu_collect=args.gpu_collect)
         print('\n')
-        print('Extracting features from gallery set ...')
+        logger.info('Extracting features from gallery set ...')
         gallery_outputs = multi_gpu_test(model, gallery_loader,
                                          return_loss=False,
                                          tmpdir=args.tmpdir,
@@ -169,21 +171,21 @@ def test_reid(cfg, args, distributed):
 
         eval_cfg = cfg.get('evaluation', {})
         dist_metric = eval_cfg.get('metric', 'euclidean')
-        print(f'Computing distance matrix with metric = {dist_metric} ...')
+        logger.info(f'Computing distance matrix with metric = {dist_metric} ...')
         distmat = compute_distance_matrix(
             query_feats, gallery_feats, metric=dist_metric)
         distmat = distmat.numpy()
 
-        print('Computing CMC and mAP ...')
+        logger.info('Computing CMC and mAP ...')
         cmc, mAP = query_datatset.evaluate(
             distmat, query_pids, query_camids, gallery_pids, gallery_camids)
 
-        print('** Results **')
-        print('mAP: {:.1%}'.format(mAP))
-        print('CMC curve')
+        logger.info('** Results **')
+        logger.info('mAP: {:.1%}'.format(mAP))
+        logger.info('CMC curve:')
         ranks = eval_cfg.get('ranks', [1, 5, 10, 20])
         for i in ranks:
-            print('Rank-{:<3}: {:.1%}'.format(i, cmc[i - 1]))
+            logger.info('Rank-{:<3}: {:.1%}'.format(i, cmc[i - 1]))
 
 
 def main():
@@ -201,12 +203,18 @@ def main():
     else:
         distributed = True
         init_dist(args.launcher, **cfg.dist_params)
+    
+    work_dir = os.path.split(args.checkpoint)[0]
+    # init the logger before other steps
+    timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
+    log_file = os.path.join(work_dir, f'{timestamp}-test.log')
+    logger = get_root_logger(log_file=log_file)
 
     task_type = cfg.model.get('type').lower()
     if 'classifier' in task_type:
         test_classifier(cfg, args, distributed)
     elif 'reid' in task_type:
-        test_reid(cfg, args, distributed)
+        test_reid(cfg, args, distributed, logger)
 
     
 if __name__ == '__main__':
