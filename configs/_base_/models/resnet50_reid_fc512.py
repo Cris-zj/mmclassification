@@ -19,6 +19,11 @@ model = dict(
         type='LinearClsHead',
         num_classes=751,
         in_channels=512,
-        loss=dict(type='CrossEntropyLoss', loss_weight=1.0),
+        loss=dict(type='LabelSmoothLoss',
+                  label_smooth_val=0.1,
+                  num_classes=751,
+                  loss_weight=1.0
+            ),
         topk=(1, 5),
-    ))
+    )
+)
