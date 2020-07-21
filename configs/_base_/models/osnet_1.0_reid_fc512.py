@@ -9,7 +9,7 @@ model = dict(
         out_indices=(3,),
         conv_cfg=None,
         norm_cfg=dict(type='BN'),
-        act_cfg=dict(type='ReLU'),
+        act_cfg=dict(type='ReLU', inplace=True),
     ),
     neck=[
         dict(type='GlobalAveragePooling'),
