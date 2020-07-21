@@ -178,19 +178,19 @@ class OSNet(BaseBackbone):
         super(OSNet, self).__init__()
         self.widen_factor = widen_factor
         for index in out_indices:
-            if index not in range(0, 8):
+            if index not in range(0, 4):
                 raise ValueError('the item in out_indices must in '
-                                 f'range(0, 8). But received {index}')
+                                 f'range(0, 4). But received {index}')
 
-        if frozen_stages not in range(-1, 8):
-            raise ValueError('frozen_stages must be in range(-1, 8). '
+        if frozen_stages not in range(-1, 4):
+            raise ValueError('frozen_stages must be in range(-1, 4). '
                              f'But received {frozen_stages}')
         self.out_indices = out_indices
         self.frozen_stages = frozen_stages
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
         self.act_cfg = act_cfg
-        self.norm_eval = norm_cfg
+        self.norm_eval = norm_eval
 
         self.inplanes = round(64 * self.widen_factor)
         self._make_stem_layer()
