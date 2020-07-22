@@ -3,7 +3,7 @@ import argparse
 from mmcv import Config
 from mmcv.cnn.utils import get_model_complexity_info
 
-from mmcls.models import build_classifier
+from mmcls.models import build_classifier, build_reid
 
 
 def parse_args():
@@ -31,7 +31,11 @@ def main():
         raise ValueError('invalid input shape')
 
     cfg = Config.fromfile(args.config)
-    model = build_classifier(cfg.model)
+    task_type = cfg.model.get('type').lower()
+    if 'classifier' in task_type:
+        model = build_classifier(cfg.model)
+    elif 'reid' in task_type:
+        model = build_reid(cfg.model)
     model.eval()
 
     if hasattr(model, 'extract_feat'):
