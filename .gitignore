@@ -116,3 +116,6 @@ work_dirs/
 
 # Pytorch
 *.pth
+
+# ONNX
+*.onnx
