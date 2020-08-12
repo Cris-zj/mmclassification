@@ -22,8 +22,7 @@ model = dict(
         loss=dict(type='LabelSmoothLoss',
                   label_smooth_val=0.1,
                   num_classes=751,
-                  loss_weight=1.0
-            ),
+                  loss_weight=1.0),
         topk=(1, 5),
     )
 )

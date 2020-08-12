@@ -54,7 +54,7 @@ def test_classifier(cfg, args, distributed):
         dist=distributed,
         shuffle=False,
         round_up=False)
-    
+
     # build the model and load checkpoint
     model = build_classifier(cfg.model)
     fp16_cfg = cfg.get('fp16', None)
@@ -113,7 +113,7 @@ def test_reid(cfg, args, distributed, logger):
         dist=distributed,
         shuffle=False,
         round_up=False)
-    
+
     # build the model and load checkpoint
     model = build_reid(cfg.model)
     fp16_cfg = cfg.get('fp16', None)
@@ -171,7 +171,8 @@ def test_reid(cfg, args, distributed, logger):
 
         eval_cfg = cfg.get('evaluation', {})
         dist_metric = eval_cfg.get('metric', 'euclidean')
-        logger.info(f'Computing distance matrix with metric = {dist_metric} ...')
+        logger.info(
+            f'Computing distance matrix with metric = {dist_metric} ...')
         distmat = compute_distance_matrix(
             query_feats, gallery_feats, metric=dist_metric)
         distmat = distmat.numpy()
@@ -196,14 +197,14 @@ def main():
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
     cfg.model.pretrained = None
-    
+
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
         distributed = False
     else:
         distributed = True
         init_dist(args.launcher, **cfg.dist_params)
-    
+
     work_dir = os.path.split(args.checkpoint)[0]
     # init the logger before other steps
     timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
@@ -216,6 +217,6 @@ def main():
     elif 'reid' in task_type:
         test_reid(cfg, args, distributed, logger)
 
-    
+
 if __name__ == '__main__':
     main()

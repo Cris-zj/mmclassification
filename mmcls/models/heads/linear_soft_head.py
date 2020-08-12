@@ -36,7 +36,7 @@ class LinearSoftClsHead(ClsHead):
 
     def init_weights(self):
         normal_init(self.fc, mean=0, std=0.01, bias=0)
-    
+
     def loss(self, cls_score, gt_label):
         num_samples = len(cls_score)
         losses = dict()

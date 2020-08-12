@@ -6,7 +6,8 @@ from ..builder import LOSSES
 from .utils import weight_reduce_loss
 
 
-def soft_cross_entropy(pred, label, weight=None, reduction='mean', avg_factor=None):
+def soft_cross_entropy(pred, label, weight=None, reduction='mean',
+                       avg_factor=None):
     # element-wise losses
     loss = torch.sum(-label * F.log_softmax(pred, dim=1), dim=1)
 

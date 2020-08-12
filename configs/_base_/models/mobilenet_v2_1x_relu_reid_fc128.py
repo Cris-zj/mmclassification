@@ -2,7 +2,9 @@
 model = dict(
     type='ImageReID',
     pretrained='pretrained/mobilenetv2_relu.pth',
-    backbone=dict(type='MobileNetV2', widen_factor=1.0, act_cfg=dict(type='ReLU')),
+    backbone=dict(type='MobileNetV2',
+                  widen_factor=1.0,
+                  act_cfg=dict(type='ReLU')),
     neck=[
         dict(type='GlobalAveragePooling'),
         dict(type='LinearNeck',
@@ -16,8 +18,7 @@ model = dict(
         loss=dict(type='LabelSmoothLoss',
                   label_smooth_val=0.1,
                   num_classes=751,
-                  loss_weight=1.0
-            ),
+                  loss_weight=1.0),
         topk=(1, 5),
     )
 )

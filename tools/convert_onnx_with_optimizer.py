@@ -38,13 +38,19 @@ def main():
         raise ValueError('invalid input shape')
     dummy_input = torch.randn(*img_shape, device='cuda')
     cfg = mmcv.Config.fromfile(args.config)
-    model = build_reid(cfg.model).cuda()
+    task_type = cfg.model.get('type').lower()
+    if 'classifier' in task_type:
+        model = build_classifier(cfg.model).cuda()
+    elif 'reid' in task_type:
+        model = build_reid(cfg.model).cuda()
     model.eval()
+
     if args.checkpoint:
         print('load checkpoint')
         _ = load_checkpoint(model, args.checkpoint)
     model.forward = model.extract_feat
-    torch.onnx.export(model, dummy_input, args.out, verbose=True, keep_initializers_as_inputs=True)
+    torch.onnx.export(model, dummy_input, args.out, verbose=True,
+                      keep_initializers_as_inputs=True)
     print('Convert to onnx model successfully!')
 
     print("Start optimize ONNX model for inference:")
@@ -66,6 +72,7 @@ def main():
     onnx.save_model(optimized_model, optimized_model_path)
     print("Optimize Finished!")
     print("Please check new model in:", optimized_model_path)
+
 
 if __name__ == '__main__':
     main()

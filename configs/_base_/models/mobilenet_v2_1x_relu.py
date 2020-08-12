@@ -1,7 +1,9 @@
 # model settings
 model = dict(
     type='ImageClassifier',
-    backbone=dict(type='MobileNetV2', widen_factor=1.0, act_cfg=dict(type='ReLU')),
+    backbone=dict(type='MobileNetV2',
+                  widen_factor=1.0,
+                  act_cfg=dict(type='ReLU')),
     neck=dict(type='GlobalAveragePooling'),
     head=dict(
         type='LinearClsHead',
