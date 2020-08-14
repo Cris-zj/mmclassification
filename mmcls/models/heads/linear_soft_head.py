@@ -37,17 +37,21 @@ class LinearSoftClsHead(ClsHead):
     def init_weights(self):
         normal_init(self.fc, mean=0, std=0.01, bias=0)
 
-    def loss(self, cls_score, gt_label):
+    def loss(self, cls_score, gt_label, gt_onehot):
         num_samples = len(cls_score)
         losses = dict()
         # compute loss
-        loss = self.compute_loss(cls_score, gt_label, avg_factor=num_samples)
+        loss = self.compute_loss(cls_score, gt_onehot, avg_factor=num_samples)
 
+        # compute accuracy
+        acc = self.compute_accuracy(cls_score, gt_label)
+        assert len(acc) == len(self.topk)
         losses['loss'] = loss
+        losses['accuracy'] = {f'top-{k}': a for k, a in zip(self.topk, acc)}
         losses['num_samples'] = loss.new(1).fill_(num_samples)
         return losses
 
-    def forward_train(self, x, gt_label):
+    def forward_train(self, x, gt_label, gt_onehot):
         cls_score = self.fc(x)
-        losses = self.loss(cls_score, gt_label)
+        losses = self.loss(cls_score, gt_label, gt_onehot)
         return losses
