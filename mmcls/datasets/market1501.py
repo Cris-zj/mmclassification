@@ -24,6 +24,10 @@ class Market1501(BaseDataset):
             info = {'img_prefix': self.data_prefix}
             info['img_info'] = {'filename': filename}
             info['gt_label'] = np.array(gt_label, dtype=np.int64)
+            onehot = np.zeros((751,), dtype=np.float32)
+            if not self.test_mode:
+                onehot[gt_label] = 1.
+            info['gt_onehot'] = onehot
             info['camid'] = np.array(camid, dtype=np.int64)
             data_infos.append(info)
         return data_infos
