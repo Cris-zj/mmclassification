@@ -1,5 +1,6 @@
 import math
 import random
+from collections import deque
 
 import mmcv
 import numpy as np
@@ -541,4 +542,297 @@ class RandomErase(object):
         format_string += f', scale={tuple(round(s, 4) for s in self.scale)}'
         format_string += f', ratio={tuple(round(r, 4) for r in self.ratio)}'
         format_string += f', mean={tuple(round(m, 4) for m in self.mean)})'
+        return format_string
+
+
+@PIPELINES.register_module()
+class RandomPatch(object):
+    """Random patch data augmentation.
+
+    For each input image, RandomPatch
+        1) extracts a random patch and stores the patch in the patch pool;
+        2) randomly selects a patch from the patch pool and pastes it on the
+           input (at random position) to simulate occlusion.
+
+    Reference:
+        - Zhou et al. Omni-Scale Feature Learning for Person Re-Identification. ICCV, 2019. # noqa: E501
+        - Zhou et al. Learning Generalisable Omni-Scale Representations
+          for Person Re-Identification. arXiv preprint, 2019.
+
+    Arg:
+
+    """
+
+    def __init__(self,
+                 patch_prob=0.5,
+                 scale=(0.01, 0.5),
+                 ratio=(1. / 10., 10.),
+                 rotate_prob=0.5,
+                 rotate_angle=(-10, 10),
+                 flip_prob=0.5,
+                 total_num_samples=2,
+                 min_num_samples=100,
+                 pool_capacity=50000):
+        self.patch_prob = patch_prob
+        self.scale = scale
+        self.ratio = ratio
+        self.rotate_prob = rotate_prob
+        self.rotate_angle = rotate_angle
+        self.flip_prob = flip_prob
+        self.total_num_samples = total_num_samples
+        self.min_num_samples = min_num_samples
+        self.pool_capacity = pool_capacity
+        self.patch_pool = deque(maxlen=pool_capacity)
+
+    @staticmethod
+    def get_params(img, scale, ratio):
+        """Get parameters for ``patch`` for a random patch.
+
+        Args:
+            img (ndarray): Image to be crop.
+            scale (tuple): Range of the random size of the erased area
+                compared to the original image size.
+            ratio (tuple): Range of the random aspect ratio of the erased area
+                compared to the original image area.
+
+        Returns:
+            tuple: Params (xmin, ymin, target_height, target_width) to be
+                passed to ``patch`` for a random patch.
+        """
+
+        height = img.shape[0]
+        width = img.shape[1]
+        area = height * width
+
+        for _ in range(100):
+            target_area = random.uniform(*scale) * area
+            aspect_ratio = random.uniform(*ratio)
+
+            target_height = int(round(math.sqrt(target_area * aspect_ratio)))
+            target_width = int(round(math.sqrt(target_area / aspect_ratio)))
+
+            if 0 < target_height <= height and 0 < target_width <= width:
+                xmin = random.randint(0, height - target_height)
+                ymin = random.randint(0, width - target_width)
+                return xmin, ymin, target_height, target_width
+
+        # Fallback to central crop
+        in_ratio = float(width) / float(height)
+        if in_ratio < min(ratio):
+            target_width = width
+            target_height = int(round(target_width / min(ratio)))
+        elif in_ratio > max(ratio):
+            target_height = height
+            target_width = int(round(target_height * max(ratio)))
+        else:  # whole image
+            target_width = width
+            target_height = height
+        xmin = (height - target_height) // 2
+        ymin = (width - target_width) // 2
+        return xmin, ymin, target_height, target_width
+
+    def __call__(self, results):
+        self.patch_pool.append(results.copy())
+        if len(self.patch_pool) < self.min_num_samples:
+            return results
+        if random.uniform(0, 1) > self.patch_prob:
+            return results
+
+        sample = np.random.choice(
+            self.patch_pool, self.total_num_samples - 1)[0]
+
+        for key in results.get('img_fields', ['img']):
+            img = results[key]
+            sample_img = sample[key]
+            xmin, ymin, h, w = self.get_params(
+                sample_img, self.scale, self.ratio)
+            patch = mmcv.imcrop(
+                sample_img,
+                np.array([
+                    ymin, xmin, ymin + w - 1,
+                    xmin + h - 1
+                ])
+            )
+            if random.uniform(0, 1) > self.flip_prob:
+                patch = mmcv.imflip(patch, 'horizontal')
+            if random.uniform(0, 1) > self.rotate_prob:
+                patch = mmcv.imrotate(
+                    patch, random.randint(*self.rotate_angle))
+            x1 = random.randint(0, img.shape[0] - h)
+            y1 = random.randint(0, img.shape[1] - w)
+            img[x1:x1 + h, y1:y1 + w] = patch
+            results[key] = img
+
+        alpha = float(h * w) / float(img.shape[0] * img.shape[1])
+
+        gt_onehot = results['gt_onehot']
+        sample_gt_onehot = sample['gt_onehot']
+
+        target_gt_onehot = (1. - alpha) * gt_onehot + alpha * sample_gt_onehot
+        results['gt_onehot'] = target_gt_onehot
+
+        return results
+
+    def __repr__(self):
+        format_string = self.__class__.__name__
+        format_string += f'(patch_prob={self.patch_prob}'
+        format_string += f', scale={tuple(round(s, 4) for s in self.scale)}'
+        format_string += f', ratio={tuple(round(r, 4) for r in self.ratio)}'
+        format_string += f', rotate_prob={self.rotate_prob}'
+        format_string += f', rotate_angle={tuple(int(r) for r in self.rotate_angle)}'  # noqa: E501
+        format_string += f', flip_prob={self.flip_prob}'
+        format_string += f', total_num_samples={self.total_num_samples}'
+        format_string += f', min_num_samples={self.min_num_samples}'
+        format_string += f', pool_capacity={self.pool_capacity}'
+        return format_string
+
+
+@PIPELINES.register_module()
+class MixUp(object):
+    """Mix two images.
+    Refer to the paper for more details: https://arxiv.org/abs/1710.09412.pdf.
+    Arg:
+        mixup_lambda (float): the weight of mixed image.
+        mixup_prob (float): Probability that this operation takes place.
+            Default is 0.5.
+        total_num_samples (int): The numbers of combined images.
+        pool_capacity (int): maximum images in pool for selecting images.
+    """
+
+    def __init__(self,
+                 mixup_lambda=0.5,
+                 mixup_prob=0.5,
+                 total_num_samples=2,
+                 min_num_samples=100,
+                 pool_capacity=50000):
+        self.mixup_lambda = mixup_lambda
+        self.mixup_prob = mixup_prob
+        self.total_num_samples = total_num_samples
+        self.min_num_samples = min_num_samples
+        self.pool_capacity = pool_capacity
+        self.mixup_pool = deque(maxlen=pool_capacity)
+
+    def __call__(self, results):
+        self.mixup_pool.append(results.copy())
+        if len(self.mixup_pool) < self.min_num_samples:
+            return results
+        if random.uniform(0, 1) > self.mixup_prob:
+            return results
+
+        mixup_sample = np.random.choice(
+            self.mixup_pool, self.total_num_samples - 1)[0]
+
+        img = results['img']
+        gt_onehot = results['gt_onehot']
+
+        mixup_img = mixup_sample['img']
+        mixup_gt_onehot = mixup_sample['gt_onehot']
+
+        target_img = self.mixup_lambda * img + \
+            (1 - self.mixup_lambda) * mixup_img
+
+        target_gt_onehot = self.mixup_lambda * gt_onehot + \
+            (1 - self.mixup_lambda) * mixup_gt_onehot
+
+        results['img'] = target_img
+        results['gt_onehot'] = target_gt_onehot
+
+        return results
+
+    def __repr__(self):
+        format_string = self.__class__.__name__
+        format_string += f'(mixup_lambda={self.mixup_lambda}'
+        format_string += f', mixup_prob={self.mixup_prob}'
+        format_string += f', total_num_samples={self.total_num_samples}'  # noqa: E501
+        format_string += f', pool_capacity={self.pool_capacity})'
+        return format_string
+
+
+@PIPELINES.register_module()
+class CutMix(object):
+    """Cut and Mix two images.
+    Refer to the paper for more details: https://arxiv.org/pdf/1905.04899v2.pdf. # noqa: E501
+    Args:
+        beta (float): The beta distribution. Default is 1.0.
+        cutmix_prob (float): Probability that this operation takes place.
+            Default is 0.5.
+        total_num_samples (int): The numbers of combined images.
+        pool_capacity (int): Maximum images in pool for selecting images.
+    """
+
+    def __init__(self,
+                 beta=1.0,
+                 cutmix_prob=0.5,
+                 total_num_samples=2,
+                 min_num_samples=100,
+                 pool_capacity=50000):
+        self.beta = beta
+        self.cutmix_prob = cutmix_prob
+        self.total_num_samples = total_num_samples
+        self.min_num_samples = min_num_samples
+        self.pool_capacity = pool_capacity
+        self.cutmix_pool = deque(maxlen=pool_capacity)
+
+    @staticmethod
+    def get_params(img, lam):
+        """Get parameters for cut and mix.
+
+        Args:
+            img (ndarray): Image to be cut and mixed.
+            lam (float): The combination ratio between two images.
+
+        Returns:
+            tuple: Params (left, top, right, bottom, alpha) to be used in cutmix. # noqa: E501
+        """
+
+        height = img.shape[0]
+        width = img.shape[1]
+        cut_ratio = np.sqrt(1. - lam)
+
+        cut_h = int(height * cut_ratio)
+        cut_w = int(width * cut_ratio)
+
+        cut_cy = random.randint(0, height)
+        cut_cx = random.randint(0, width)
+
+        left = np.clip(cut_cx - cut_w // 2, 0, width - 1)
+        top = np.clip(cut_cy - cut_h // 2, 0, height - 1)
+        right = np.clip(cut_cx + cut_w // 2, 0, width - 1)
+        bottom = np.clip(cut_cy + cut_h // 2, 0, height - 1)
+
+        alpha = 1 - float(cut_h * cut_w) / float(height * width)
+
+        return left, top, right, bottom, alpha
+
+    def __call__(self, results):
+        self.cutmix_pool.append(results.copy())
+        if len(self.cutmix_pool) < self.min_num_samples:
+            return results
+        if random.uniform(0, 1) > self.cutmix_prob:
+            return results
+
+        cutmix_sample = np.random.choice(
+            self.cutmix_pool, self.total_num_samples - 1)[0]
+        lam = random.betavariate(self.beta, self.beta)
+
+        for key in results.get('img_fields', ['img']):
+            img = results[key]
+            left, top, right, bottom, alpha = self.get_params(img, lam)
+            cutmix_img = cutmix_sample[key]
+            img[top:bottom, left:right] = cutmix_img[top:bottom, left:right]
+            results[key] = img
+
+        gt_onehot = results['gt_onehot']
+        cutmix_gt_onehot = cutmix_sample['gt_onehot']
+        target_gt_onehot = alpha * gt_onehot + (1. - alpha) * cutmix_gt_onehot
+        results['gt_onehot'] = target_gt_onehot
+
+        return results
+
+    def __repr__(self):
+        format_string = self.__class__.__name__
+        format_string += f'(beta={self.beta}'
+        format_string += f', cutmix_prob={self.cutmix_prob}'
+        format_string += f', total_num_samples={self.total_num_samples}'  # noqa: E501
+        format_string += f', pool_capacity={self.pool_capacity})'
         return format_string
