@@ -16,7 +16,7 @@ train_pipeline = [
     dict(type='CutMix', beta=1.0, cutmix_prob=0.5),
     dict(type='ImageToTensor', keys=['img']),
     dict(type='ToTensor', keys=['gt_label']),
-    dict(type='Collect', keys=['img', 'gt_label'])
+    dict(type='Collect', keys=['img', 'gt_label', 'gt_onehot'])
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),

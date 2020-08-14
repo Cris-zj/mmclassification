@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/models/mobilenet_v2_1x_relu_reid_fc128_scel.py',
+    '../_base_/models/mobilenet_v2_1x_relu_reid_fc128.py',
     '../_base_/schedules/market1501_bs64_250e_coslr.py',
     '../_base_/default_runtime.py'
 ]
@@ -16,7 +16,7 @@ train_pipeline = [
     dict(type='MixUp', mixup_lambda=0.5, mixup_prob=0.5),
     dict(type='ImageToTensor', keys=['img']),
     dict(type='ToTensor', keys=['gt_label']),
-    dict(type='Collect', keys=['img', 'gt_label', 'gt_onehot'])
+    dict(type='Collect', keys=['img', 'gt_label'])
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),

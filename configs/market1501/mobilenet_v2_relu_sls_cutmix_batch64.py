@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/models/mobilenet_v2_1x_relu_reid_fc128_scel.py',
+    '../_base_/models/mobilenet_v2_1x_relu_reid_fc128_sls.py',
     '../_base_/schedules/market1501_bs64_250e_coslr.py',
     '../_base_/default_runtime.py'
 ]
@@ -13,7 +13,7 @@ train_pipeline = [
     dict(type='Resize', size=(256, 128)),
     dict(type='RandomFlip', flip_prob=0.5, direction='horizontal'),
     dict(type='Normalize', **img_norm_cfg),
-    dict(type='MixUp', mixup_lambda=0.5, mixup_prob=0.5),
+    dict(type='CutMix', beta=1.0, cutmix_prob=0.5, min_num_samples=2),
     dict(type='ImageToTensor', keys=['img']),
     dict(type='ToTensor', keys=['gt_label']),
     dict(type='Collect', keys=['img', 'gt_label', 'gt_onehot'])
