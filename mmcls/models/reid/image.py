@@ -55,7 +55,7 @@ class ImageReID(BaseReID):
         x = self.extract_feat(img)
 
         losses = dict()
-        loss = self.head.forward_train(x, gt_label)
+        loss = self.head.forward_train(x, gt_label, **kwargs)
         losses.update(loss)
 
         return losses
