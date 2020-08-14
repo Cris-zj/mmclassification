@@ -6,10 +6,21 @@ from ..builder import LOSSES
 from .utils import weight_reduce_loss
 
 
-def soft_cross_entropy(pred, label, weight=None, reduction='mean',
-                       avg_factor=None):
+def soft_label_smooth(pred,
+                      label,
+                      label_smooth_val,
+                      avg_smooth_val,
+                      weight=None,
+                      reduction='mean',
+                      avg_factor=None):
     # element-wise losses
-    loss = -torch.sum(F.log_softmax(pred, dim=1) * label, dim=1)
+    one_hot = torch.zeros_like(pred)
+    one_hot.fill_(avg_smooth_val)
+    label[label == 1.] = 1 - label_smooth_val + avg_smooth_val
+    bs_inds, label_inds = label.nonzero().t()
+    one_hot[bs_inds, label_inds] = label[bs_inds, label_inds]
+
+    loss = -torch.sum(F.log_softmax(pred, 1) * (one_hot.detach()))
 
     # apply weights and do the reduction
     if weight is not None:
@@ -21,14 +32,20 @@ def soft_cross_entropy(pred, label, weight=None, reduction='mean',
 
 
 @LOSSES.register_module()
-class SoftCrossEntropyLoss(nn.Module):
+class SoftLabelSmoothLoss(nn.Module):
 
-    def __init__(self, reduction='mean', loss_weight=1.0):
-        super(SoftCrossEntropyLoss, self).__init__()
+    def __init__(self,
+                 label_smooth_val,
+                 num_classes,
+                 reduction='mean',
+                 loss_weight=1.0):
+        super(SoftLabelSmoothLoss, self).__init__()
+        self.label_smooth_val = label_smooth_val
+        self.avg_smooth_val = self.label_smooth_val / num_classes
         self.reduction = reduction
         self.loss_weight = loss_weight
 
-        self.cls_criterion = soft_cross_entropy
+        self.cls_criterion = soft_label_smooth
 
     def forward(self,
                 cls_score,
@@ -43,6 +60,8 @@ class SoftCrossEntropyLoss(nn.Module):
         loss_cls = self.loss_weight * self.cls_criterion(
             cls_score,
             label,
+            self.label_smooth_val,
+            self.avg_smooth_val,
             weight,
             reduction=reduction,
             avg_factor=avg_factor,
