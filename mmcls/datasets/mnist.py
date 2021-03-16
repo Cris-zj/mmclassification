@@ -35,10 +35,6 @@ class MNIST(BaseDataset):
         '6 - six', '7 - seven', '8 - eight', '9 - nine'
     ]
 
-    @property
-    def class_to_idx(self):
-        return {_class: i for i, _class in enumerate(self.CLASSES)}
-
     def load_annotations(self):
         train_image_file = osp.join(
             self.data_prefix, rm_suffix(self.resources['train_image_file'][0]))
@@ -117,7 +113,7 @@ def open_maybe_compressed_file(path):
        Decompression occurs when argument `path` is a string
        and ends with '.gz' or '.xz'.
     """
-    if not isinstance(path, torch._six.string_classes):
+    if not isinstance(path, str):
         return path
     if path.endswith('.gz'):
         import gzip

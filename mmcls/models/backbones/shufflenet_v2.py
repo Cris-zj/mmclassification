@@ -19,7 +19,7 @@ class InvertedResidual(nn.Module):
         in_channels (int): The input channels of the block.
         out_channels (int): The output channels of the block.
         stride (int): Stride of the 3x3 convolution layer. Default: 1
-        conv_cfg (dict): Config dict for convolution layer.
+        conv_cfg (dict, optional): Config dict for convolution layer.
             Default: None, which means using conv2d.
         norm_cfg (dict): Config dict for normalization layer.
             Default: dict(type='BN').
@@ -141,7 +141,7 @@ class ShuffleNetV2(BaseBackbone):
             Default: (0, 1, 2, 3).
         frozen_stages (int): Stages to be frozen (all param fixed).
             Default: -1, which means not freezing any parameters.
-        conv_cfg (dict): Config dict for convolution layer.
+        conv_cfg (dict, optional): Config dict for convolution layer.
             Default: None, which means using conv2d.
         norm_cfg (dict): Config dict for normalization layer.
             Default: dict(type='BN').
@@ -261,17 +261,16 @@ class ShuffleNetV2(BaseBackbone):
             load_checkpoint(self, pretrained, strict=False, logger=logger)
         elif pretrained is None:
             for name, m in self.named_modules():
-                for name, m in self.named_modules():
-                    if isinstance(m, nn.Conv2d):
-                        if 'conv1' in name:
-                            normal_init(m, mean=0, std=0.01)
-                        else:
-                            normal_init(m, mean=0, std=1.0 / m.weight.shape[1])
-                    elif isinstance(m, (_BatchNorm, nn.GroupNorm)):
-                        constant_init(m.weight, val=1, bias=0.0001)
-                        if isinstance(m, _BatchNorm):
-                            if m.running_mean is not None:
-                                nn.init.constant_(m.running_mean, 0)
+                if isinstance(m, nn.Conv2d):
+                    if 'conv1' in name:
+                        normal_init(m, mean=0, std=0.01)
+                    else:
+                        normal_init(m, mean=0, std=1.0 / m.weight.shape[1])
+                elif isinstance(m, (_BatchNorm, nn.GroupNorm)):
+                    constant_init(m.weight, val=1, bias=0.0001)
+                    if isinstance(m, _BatchNorm):
+                        if m.running_mean is not None:
+                            nn.init.constant_(m.running_mean, 0)
         else:
             raise TypeError('pretrained must be a str or None. But received '
                             f'{type(pretrained)}')

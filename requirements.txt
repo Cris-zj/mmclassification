@@ -1,2 +1,3 @@
-mmcv
-numpy
+-r requirements/optional.txt
+-r requirements/runtime.txt
+-r requirements/tests.txt
