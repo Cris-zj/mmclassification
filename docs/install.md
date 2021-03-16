@@ -4,10 +4,9 @@
 
 - Python 3.6+
 - PyTorch 1.3+
-- [mmcv](https://github.com/open-mmlab/mmcv)
+- [mmcv](https://github.com/open-mmlab/mmcv) 1.1.4+
 
-
-### Install mmclassification
+### Install MMClassification
 
 a. Create a conda virtual environment and activate it.
 
@@ -60,6 +59,10 @@ Note:
 1. Following the above instructions, mmclassification is installed on `dev` mode, any local modifications made to the code will take effect without the need to reinstall it (unless you submit some commits and want to update the version number).
 
 2. If you would like to use `opencv-python-headless` instead of `opencv-python`,
+<<<<<<< HEAD
+=======
+
+>>>>>>> f3b9380cbc4a07109ddbf5111dfcf8e5077d7384
 you can install it before installing [mmcv](https://github.com/open-mmlab/mmcv).
 
 ### Using multiple MMClassification versions

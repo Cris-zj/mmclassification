@@ -31,8 +31,7 @@ test_pipeline = [
     dict(type='CenterCrop', crop_size=224),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='ImageToTensor', keys=['img']),
-    dict(type='ToTensor', keys=['gt_label']),
-    dict(type='Collect', keys=['img', 'gt_label'])
+    dict(type='Collect', keys=['img'])
 ]
 ```
 
@@ -58,8 +57,8 @@ At the end of the pipeline, we use `Collect` to only retain the necessary items 
 ### Data loading
 
 `LoadImageFromFile`
-- add: img, img_shape, ori_shape
 
+- add: img, img_shape, ori_shape
 
 ### Pre-processing
 
@@ -68,29 +67,35 @@ At the end of the pipeline, we use `Collect` to only retain the necessary items 
 - update: img, img_shape
 
 `RandomFlip`
+
 - add: flip, flip_direction
 - update: img
 
-
 `RandomCrop`
+
 - update: img, pad_shape
 
 `Normalize`
+
 - add: img_norm_cfg
 - update: img
 
 ### Formatting
 
 `ToTensor`
+
 - update: specified by `keys`.
 
 `ImageToTensor`
+
 - update: specified by `keys`.
 
 `Transpose`
+
 - update: specified by `keys`.
 
 `Collect`
+
 - remove: all other keys except for those specified by `keys`
 
 ## Extend and use custom pipelines
